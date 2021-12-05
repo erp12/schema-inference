@@ -1,0 +1,29 @@
+# Clojure
+pom.xml
+pom.xml.asc
+*.jar
+*.class
+/lib/
+/classes/
+/target/
+/checkouts/
+.nrepl-port
+.cpcache/
+.lsp/
+.clj-kondo/
+
+# Clojurescript
+out/
+node_modules/
+.shadow-cljs/
+
+# Intellij / Cursive
+.idea/
+ga-clj.iml
+
+# VS Codes / Calva
+.calva/
+
+# OS
+*~
+.DS_Store
