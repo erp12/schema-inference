@@ -1,8 +1,24 @@
 (ns erp12.schema-inference.ast
   (:require [clojure.core.match :refer [match]]
+            [clojure.string :as str]
+            [clojure.set :as set]
             [clojure.walk :as w]
             [malli.core :as m]
             [malli.util :as mu]))
+
+(def gen-var-prefix "v_")
+
+(defn gen-var
+  "Generate a unique var symbol."
+  []
+  (gensym gen-var-prefix))
+
+(defn gen-var?
+  [v]
+  (str/starts-with? (name v) gen-var-prefix))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Forms <-> ASTs
 
 (defn var-form?
   [form]
@@ -197,18 +213,25 @@
           ::Subs       Subs
           ::AST        AST}))
 
+(defn- is-a?
+  [ast-kind ast]
+  (m/validate ast-kind ast {:registry registry}))
+
+(defn lit?
+  [ast]
+  (is-a? ::Lit ast))
 
 (defn atomic?
   [ast]
-  (m/validate ::Atomic ast {:registry registry}))
+  (is-a? ::Atomic ast))
 
 (defn scheme?
   [ast]
-  (m/validate ::Scheme ast {:registry registry}))
+  (is-a? ::Scheme ast))
 
 (defn env?
   [x]
-  (m/validate ::Env x {:registry registry}))
+  (is-a? ::Env x))
 
 (defn occurs?
   [x ast]
@@ -250,3 +273,67 @@
 
         ;; If reached all terms for both, schemas are the same.
         :else nil))))
+
+(defn free-vars
+  "The set of free vars in the expression."
+  [expr]
+  (match expr
+    [:var v]
+    #{v}
+
+    [:fn [:cat & args] & body]
+    (set/difference (reduce set/union (map free-vars body))
+                    (set (map second args)))
+
+    [:apply f & args]
+    (apply set/union (free-vars f) (map free-vars args))
+
+    [:let [& bindings] & body]
+    (let [var-&-def (partition 2 bindings)
+          [free bound] (reduce (fn [[free bound] [v d]]
+                                 [(set/union free (set/difference (free-vars d) bound))
+                                  (set/union bound #{v})])
+                               [#{} #{}]
+                               var-&-def)]
+      (set/difference
+        (->> body (map free-vars) (reduce set/union) (set/union free))
+        bound))
+
+    :else #{}))
+
+(defn substitute-vars
+  "Uses the map of var substitutions to replace variables in the expression.
+  Performs alpha renaming when necessary to avoid causing name collisions.
+  The `subs` map should have symbols for both keys and values."
+  [subs expr]
+  (match expr
+
+    [:var v]
+    [:var (get subs v v)]
+
+    [:apply f & args]
+    (vec (concat [:apply (substitute-vars subs f)]
+                 (map #(substitute-vars subs %) args)))
+
+    [:fn [:cat & args] & body]
+    (let [bound-vars (set (map second args))
+          fvs (apply set/union (map free-vars (vals subs)))
+          ;; Alpha-renaming.
+          renames (->> args
+                       (map #(match [%] [[:var v]] v))
+                       (mapcat #(when (or (contains? fvs %)
+                                          (contains? bound-vars %))
+                                  [[% (gen-var)]]))
+                       (into {}))
+          renamed-args (->> args
+                            (map #(match [%] [[:var v]] [:var (get renames v v)]))
+                            (cons :cat)
+                            vec)
+          renamed-body (map #(substitute-vars renames %) body)]
+      (vec (concat [:fn renamed-args]
+                   (map #(substitute-vars subs %) renamed-body))))
+
+    ;[:let [& bindings] & body]
+    ;@todo Implement var substitution for Let expressions with renaming of local bindings.
+
+    ))

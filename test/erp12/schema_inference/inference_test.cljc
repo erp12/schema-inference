@@ -1,9 +1,8 @@
 (ns erp12.schema-inference.inference-test
   (:require [clojure.test :refer [deftest is testing]]
             [erp12.schema-inference.inference :refer :all]
-            [clojure.string :as str]
             [clojure.core.match :refer [match]]
-            [erp12.schema-inference.utils :as u]))
+            [erp12.schema-inference.schema :as sch]))
 
 (deftest infer-ground-schema-test
   (is (= int? (infer-ground-schema 1))))
@@ -32,7 +31,7 @@
           :with   []
           :body   [:=> [:cat [:s-var t1]] [:s-var t2]]}]
         (do
-          (is (u/gen-s-var? tv))
+          (is (sch/gen-s-var? tv))
           (is (= tv t1 t2)))))
     (testing "Higher Order Functions"
       (match [(infer-schema env '[:fn [:cat [:var f] [:var x]] [:apply [:var f] [:var x]]])]
@@ -43,8 +42,8 @@
                    [:s-var a3]]}]
         (let [t-vars #{a1 b1}]
           ;; Check type scheme variables are "fresh".
-          (is (u/gen-s-var? a1))
-          (is (u/gen-s-var? b1))
+          (is (sch/gen-s-var? a1))
+          (is (sch/gen-s-var? b1))
           (is (not (= a1 b1)))
           ;; Check inner type vars are bound in scheme.
           (doseq [t [a2 a3 b2 b3]]

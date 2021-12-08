@@ -1,29 +1,7 @@
-(ns erp12.schema-inference.utils-test
+(ns erp12.schema-inference.schema-test
   (:require [clojure.test :refer [deftest is testing]]
-            [erp12.schema-inference.utils :refer :all]
+            [erp12.schema-inference.schema :refer :all]
             [clojure.core.match :refer [match]]))
-
-(deftest free-vars-test
-  ;; (\x -> x (\z -> y z)) has free variables {x}
-  (is (= #{'y}
-         (free-vars '[:fn
-                      [:cat [:var x]]
-                      [:apply [:var x] [:fn [:cat [:var z]] [:apply [:var y] [:var z]]]]])))
-  ;; (\x -> \y -> x y)(y w) has free variables {y w}
-  (is (= #{'y 'w}
-         (free-vars '[:apply
-                      [:fn [:cat [:var x]] [:fn [:cat [:var y]] [:apply [:var x] [:var y]]]]
-                      [:apply [:var y] [:var w]]])))
-  ;; Function with multiple body statements.
-  (is (= #{'println 'y}
-         (free-vars '[:fn [:cat [:var x]]
-                      [:apply [:var println] [:var y] [:var x]]
-                      [:lit "Done"]])))
-  ;; Let
-  (is (= #{'f 'f2}
-         (free-vars '[:let [a [:lit 1]
-                            b [:apply [:var f] [:var a]]]
-                      [:apply [:var f2] [:var b] [:var a]]]))))
 
 (deftest free-type-vars-test
   (is (= #{'t1} (free-type-vars '[:s-var t1])))
@@ -38,29 +16,6 @@
     (is (= #{'t1 't3}
            (free-type-vars '[[:= x [:s-var t1]]
                              [:= y {:s-vars [t2] :body [:s-var t3]}]])))))
-
-(deftest substitute-vars-test
-  (is (= '[:var z] (substitute-vars '{x y} '[:var z])))
-  (is (= '[:apply [:var y] [:var y]]
-         (substitute-vars '{x y} '[:apply [:var x] [:var x]])))
-  (is (= '[:apply [:var z] [:var z]]
-         (substitute-vars '{x y} '[:apply [:var z] [:var z]])))
-  (testing "functions"
-    (match (substitute-vars '{x y} '[:fn [:cat [:var x]] [:var x]])
-      [:fn [:cat [:var arg]] [:var body]]
-      (do
-        (is (gen-var? arg))
-        (is (= arg body))))
-    (match (substitute-vars '{x y} '[:fn [:cat [:var y]] [:var y]])
-      [:fn [:cat [:var arg]] [:var body]]
-      (do
-        (is (gen-var? arg))
-        (is (gen-var? body))))
-    (match (substitute-vars '{x y} '[:fn [:cat [:var y]] [:apply [:var println] [:var y]] [:var y]])
-      [:fn [:cat [:var a]] [:apply [:var 'println] [:var b]] [:var c]]
-      (do
-        (is (gen-var? a))
-        (is (= a b c))))))
 
 (deftest substitute-type-test
   (is (= '[:s-var t2]
