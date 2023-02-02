@@ -19,9 +19,16 @@
 (defmethod free-type-vars :sequential [schema] (free-type-vars-ctor1 schema))
 (defmethod free-type-vars :maybe [schema] (free-type-vars-ctor1 schema))
 
-(defmethod free-type-vars :cat
+(defn- free-type-vars-ctorN
   [{:keys [children]}]
   (reduce #(set/union %1 (free-type-vars %2)) #{} children))
+
+(defmethod free-type-vars :tuple [schema] (free-type-vars-ctorN schema))
+(defmethod free-type-vars :cat [schema] (free-type-vars-ctorN schema))
+
+(defmethod free-type-vars :map-of
+  [{:keys [key value]}]
+  (set/union (free-type-vars key) (free-type-vars value)))
 
 (defmethod free-type-vars :=>
   [{:keys [input output]}]
@@ -50,10 +57,6 @@
 (defmethod substitute :ground [_ schema]
   (update schema :type #(get g/canonical-ground % %)))
 
-(defmethod substitute :cat
-  [subs {:keys [children] :as cat}]
-  (assoc cat :children (mapv #(substitute subs %) children)))
-
 (defmethod substitute :=>
   [subs {:keys [input output]}]
   {:type   :=>
@@ -75,6 +78,13 @@
 (defmethod substitute :set [subs schema] (substitute-ctor1 subs schema))
 (defmethod substitute :sequential [subs schema] (substitute-ctor1 subs schema))
 (defmethod substitute :maybe [subs schema] (substitute-ctor1 subs schema))
+
+(defn- substitute-ctorN
+  [subs {:keys [children] :as schema}]
+  (assoc schema :children (mapv #(substitute subs %) children)))
+
+(defmethod substitute :tuple [subs schema] (substitute-ctorN subs schema))
+(defmethod substitute :cat [subs schema] (substitute-ctorN subs schema))
 
 (defmethod substitute :map-of
   [subs {:keys [key value] :as map-of}]
@@ -172,7 +182,7 @@
 (defmethod mgu [:s-var :_] [a b] (bind-var a b))
 (defmethod mgu [:_ :s-var] [a b] (bind-var b a))
 
-(defn- mgu-schema-ctor
+(defn- mgu-schema-ctor1
   [{a-type :type a-child :child :as a} {b-type :type b-child :child :as b}]
   (if (not= a-type b-type)
     {:mgu-failure :mismatched-schema-ctor
@@ -180,10 +190,37 @@
      :schema-2    b}
     (mgu a-child b-child)))
 
-(defmethod mgu [:vector :vector] [a b] (mgu-schema-ctor a b))
-(defmethod mgu [:set :set] [a b] (mgu-schema-ctor a b))
-(defmethod mgu [:sequential :sequential] [a b] (mgu-schema-ctor a b))
-(defmethod mgu [:maybe :maybe] [a b] (mgu-schema-ctor a b))
+(defmethod mgu [:vector :vector] [a b] (mgu-schema-ctor1 a b))
+(defmethod mgu [:set :set] [a b] (mgu-schema-ctor1 a b))
+(defmethod mgu [:sequential :sequential] [a b] (mgu-schema-ctor1 a b))
+(defmethod mgu [:maybe :maybe] [a b] (mgu-schema-ctor1 a b))
+
+(defn- mgu-schema-ctorN
+  [{a-type :type a-children :children :as a}
+   {b-type :type b-children :children :as b}]
+  (cond
+    (not= a-type b-type)
+    {:mgu-failure :mismatched-schema-ctor
+     :schema-1    a
+     :schema-2    b}
+
+    (not= (count a-children) (count b-children))
+    {:mgu-failure :mismatched-arity
+     :schema-1    a
+     :schema-2    b}
+
+    :else
+    (->> (map vector a-children b-children)
+         (reduce (fn [subs [a-child b-child]]
+                   (if (mgu-failure? subs)
+                     subs
+                     (with-mgu (substitute subs a-child)
+                               (substitute subs b-child)
+                               #(compose-substitutions subs %))))
+                 {}))))
+
+(defmethod mgu [:tuple :tuple] [a b] (mgu-schema-ctorN a b))
+(defmethod mgu [:cat :cat] [a b] (mgu-schema-ctorN a b))
 
 (defmethod mgu [:map-of :map-of]
   [{a-key :key a-value :value} {b-key :key b-value :value}]
@@ -202,27 +239,11 @@
     {:mgu-failure :non-positional-args
      :schema-1    a
      :schema-2    b}
-    (let [a-args (:children a-input)
-          b-args (:children b-input)]
-      ;; Ensure the functions are of the same arity.
-      (if (not= (count a-args) (count b-args))
-        {:mgu-failure :mismatched-arity
-         :schema-1    a
-         :schema-2    b}
-        (loop [a-schemas (concat a-args [a-output])
-               b-schemas (concat b-args [b-output])
-               subs {}]
-          (if (empty? a-schemas)
-            subs
-            (let [a-arg (first a-schemas)
-                  b-arg (first b-schemas)
-                  result (mgu (substitute subs a-arg)
-                              (substitute subs b-arg))]
-              (if (mgu-failure? result)
-                result
-                (recur (rest a-schemas)
-                       (rest b-schemas)
-                       (compose-substitutions result subs))))))))))
+    (with-mgu a-input b-input
+              (fn [subs]
+                (with-mgu (substitute subs a-output)
+                          (substitute subs b-output)
+                          #(compose-substitutions subs %))))))
 
 (defmethod mgu :default
   [a b]
