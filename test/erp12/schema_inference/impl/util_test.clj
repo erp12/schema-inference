@@ -24,6 +24,9 @@
            (x->y {:type :s-var :sym 'x})))
     (is (= {:type :s-var :sym 'z}
            (x->y {:type :s-var :sym 'z})))
+    (testing "tuple schema"
+      (is (= {:type :tuple :children [{:type :s-var :sym 'y} {:type :s-var :sym 'y}]}
+             (x->y {:type :tuple :children [{:type :s-var :sym 'x} {:type :s-var :sym 'x}]}))))
     (testing "function schema"
       (is (= {:type   :=>
               :input  {:type     :cat
@@ -93,6 +96,8 @@
                                                 :children [{:type :s-var :sym 'x}
                                                            {:type :s-var :sym 'y}]}
                                        :output {:type :s-var :sym 'x}}))))
+  (is (= #{}
+         (u/free-type-vars {:type :map-of :key {:type 'int?} :value {:type 'string?}})))
   (testing "scheme"
     (is (= #{'y}
            (u/free-type-vars {:type   :scheme
@@ -148,7 +153,6 @@
                          {:type  :vector
                           :child {:type :s-var :sym 'y}})))))
 
-
 (deftest mgu-test
   (testing "atomic types"
     (is (= (u/mgu {:type 'int?} {:type 'int?})
@@ -195,9 +199,34 @@
                   {:type   :=>,
                    :input  {:type     :cat,
                             :children [{:type :s-var, :sym 'b}]},
-                   :output {:type :vector
+                   :output {:type  :vector
                             :child {:type :s-var, :sym 'b}}})
            {:mgu-failure :occurs-check
-            :schema-1 {:type :s-var, :sym 'b}
-            :schema-2 {:type :vector
-                       :child {:type :s-var, :sym 'b}}}))))
+            :schema-1    {:type :s-var, :sym 'b}
+            :schema-2    {:type  :vector
+                          :child {:type :s-var, :sym 'b}}})))
+  (testing "map types"
+    (is (= (u/mgu {:type  :map-of
+                   :key   {:type 'string?}
+                   :value {:type :s-var, :sym 'v}}
+                  {:type  :map-of
+                   :key   {:type :s-var, :sym 'k}
+                   :value {:type 'boolean?}})
+           {'k  {:type 'string?}
+            'v {:type 'boolean?}})))
+  (testing "tuple types"
+    (is (= (u/mgu {:type     :tuple
+                   :children [{:type :s-var, :sym 'a}
+                              {:type 'int?}]}
+                  {:type     :tuple
+                   :children [{:type 'string?}
+                              {:type :s-var, :sym 'b}]})
+           {'a {:type 'string?}
+            'b {:type 'int?}}))
+    (is (u/mgu-failure? (u/mgu {:type     :tuple
+                                :children [{:type :s-var, :sym 'a}
+                                           {:type 'int?}
+                                           {:type :s-var, :sym 'c}]}
+                               {:type     :tuple
+                                :children [{:type 'string?}
+                                           {:type :s-var, :sym 'b}]})))))
