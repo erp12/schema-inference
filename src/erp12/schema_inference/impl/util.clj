@@ -44,9 +44,9 @@
 
 (defn free-type-vars-env
   [env]
-  (if (empty? env)
-    #{}
-    (reduce #(set/union %1 (free-type-vars (val %2))) #{} env)))
+  (reduce #(set/union %1 (free-type-vars (val %2)))
+          #{}
+          env))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -65,10 +65,7 @@
 
 (defmethod substitute :s-var
   [subs s-var]
-  (loop [{:keys [sym] :as s-var} s-var]
-    (if (contains? subs sym)
-      (recur (get subs sym))
-      s-var)))
+  (get subs (:sym s-var) s-var))
 
 (defn- substitute-ctor1
   [subs {:keys [child] :as schema}]
@@ -101,8 +98,7 @@
 (defn substitute-env
   [subs env]
   (->> env
-       (map (fn [[sym schema]]
-              [sym (substitute subs schema)]))
+       (map (fn [[sym schema]] [sym (substitute subs schema)]))
        (into {})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -110,11 +106,11 @@
 (defn compose-substitutions
   "Combines 2 sets of type substitutions."
   [subs1 subs2]
-  (merge subs2
-         (into {}
-               (map (fn [[x schema]]
-                      [x (substitute subs2 schema)])
-                    subs1))))
+  (into subs1
+        (->> subs2
+             (map (fn [[k v]]
+                    [k (substitute subs1 v)]))
+             (into {}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -216,7 +212,7 @@
                      subs
                      (with-mgu (substitute subs a-child)
                                (substitute subs b-child)
-                               #(compose-substitutions subs %))))
+                               #(compose-substitutions % subs))))
                  {}))))
 
 (defmethod mgu [:tuple :tuple] [a b] (mgu-schema-ctorN a b))
@@ -229,7 +225,7 @@
               (with-mgu (substitute key-subs a-value)
                         (substitute key-subs b-value)
                         (fn [value-subs]
-                          (compose-substitutions key-subs value-subs))))))
+                          (compose-substitutions value-subs key-subs))))))
 
 (defmethod mgu [:=> :=>]
   [{a-input :input a-output :output :as a} {b-input :input b-output :output :as b}]
@@ -243,7 +239,7 @@
               (fn [subs]
                 (with-mgu (substitute subs a-output)
                           (substitute subs b-output)
-                          #(compose-substitutions subs %))))))
+                          #(compose-substitutions % subs))))))
 
 (defmethod mgu :default
   [a b]

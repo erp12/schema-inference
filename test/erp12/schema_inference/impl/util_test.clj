@@ -75,13 +75,13 @@
          {}))
   (is (= (u/compose-substitutions {'a {:type :s-var, :sym 'b}}
                                   {'b {:type 'boolean?}})
-         {'a {:type 'boolean?}
+         {'a {:sym 'b :type :s-var}
           'b {:type 'boolean?}}))
   (is (= (u/compose-substitutions {'x {:type 'string?}
                                    'y {:type 'int?}}
                                   {'y {:type :s-var :sym 'x}})
          {'x {:type 'string?}
-          'y {:type 'int?}})))
+          'y {:type 'string?}})))
 
 (deftest free-type-vars-test
   (is (= #{'x} (u/free-type-vars {:type :s-var :sym 'x})))
@@ -212,7 +212,7 @@
                   {:type  :map-of
                    :key   {:type :s-var, :sym 'k}
                    :value {:type 'boolean?}})
-           {'k  {:type 'string?}
+           {'k {:type 'string?}
             'v {:type 'boolean?}})))
   (testing "tuple types"
     (is (= (u/mgu {:type     :tuple
@@ -229,4 +229,8 @@
                                            {:type :s-var, :sym 'c}]}
                                {:type     :tuple
                                 :children [{:type 'string?}
-                                           {:type :s-var, :sym 'b}]})))))
+                                           {:type :s-var, :sym 'b}]}))))
+  (testing "set types"
+    (is (= (u/mgu {:type :set :child {:type :s-var, :sym 'a}}
+                  {:type :set :child {:type 'int?}})
+           {'a {:type 'int?}}))))

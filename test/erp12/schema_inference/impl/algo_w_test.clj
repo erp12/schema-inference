@@ -113,7 +113,16 @@
         (algo-w (ana/analyze `(if true 1 2)) test-env)]
     (is (nil? failure))
     (is (= schema {:type 'int?}))
-    (is (= (count subs) 2))))
+    (is (= (count subs) 2)))
+  (testing "failure"
+    (let [{::a/keys [subs schema failure]}
+          (algo-w (ana/analyze `(if true 1 "2")) test-env)]
+      (is (= failure
+             {:unification-failure {:mgu-failure :non-equal
+                                    :schema-1    {:type 'int?}
+                                    :schema-2    {:type 'string?}}}))
+      (is (nil? schema))
+      (is (nil? subs)))))
 
 (deftest algo-w-import-test
   (is (= (algo-w (ana/analyze `(import 'clojure.lang.Keyword)) test-env)
@@ -188,8 +197,8 @@
 
 (deftest algo-w-quote-test
   (is (= (algo-w (ana/analyze `(quote (+ 1 2))) test-env)
-         {::a/subs {}
-          ::a/schema {:type :sequential
+         {::a/subs   {}
+          ::a/schema {:type  :sequential
                       :child {:type 'some?}}})))
 
 ;(deftest algo-w-set!-test)
@@ -218,8 +227,8 @@
 (deftest algo-w-var-test
   (let [{::a/keys [subs schema failure]} (algo-w (ana/analyze `clojure.core/inc) test-env)]
     (is (nil? failure))
-    (is (= schema {:type :=>
-                   :input {:type :cat
-                           :children [{:type 'int?}]}
+    (is (= schema {:type   :=>
+                   :input  {:type     :cat
+                            :children [{:type 'int?}]}
                    :output {:type 'int?}}))
     (is (= (count subs) 0))))
