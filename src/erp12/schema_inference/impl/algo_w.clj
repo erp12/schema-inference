@@ -44,24 +44,33 @@
         {f-subs ::subs f-schema ::schema :as fn-result} (algo-w fn env)]
     (if (algo-w-failure? fn-result)
       fn-result
-      (let [env' (u/substitute-env f-subs env)
-            ;; @todo Should this reduce with incremental subs composition?
-            arg-ti (map #(algo-w % env') args)
-            failure (first (filter algo-w-failure? arg-ti))]
-        (if (some? failure)
-          failure
-          (let [subs-u (if (empty? arg-ti)
-                         {}
-                         (->> arg-ti (map ::subs) (reduce u/compose-substitutions)))
-                subs (u/mgu (u/substitute subs-u f-schema)
-                            {:type   :=>
-                             :input  {:type     :cat
-                                      :children (mapv ::schema arg-ti)}
-                             :output s-var})]
-            (if (u/mgu-failure? subs)
-              {::failure {:unification-failure subs}}
-              {::subs   (u/compose-substitutions subs subs-u)
-               ::schema (u/substitute subs s-var)})))))))
+      (let [args-ti (loop [remaining-args args
+                           env' (u/substitute-env f-subs env)
+                           args-ti []]
+                      (if (empty? remaining-args)
+                        args-ti
+                        (let [arg (first remaining-args)
+                              {a-subs ::subs :as arg-ti} (algo-w arg env')]
+                          (if (algo-w-failure? arg-ti)
+                            arg-ti
+                            (recur (rest remaining-args)
+                                   (u/substitute-env a-subs env')
+                                   (conj args-ti arg-ti))))))]
+        (if (algo-w-failure? args-ti)
+          args-ti
+          (let [subs (->> args-ti
+                          (map ::subs)
+                          reverse
+                          (reduce u/compose-substitutions {}))
+                subs' (u/mgu (u/substitute subs f-schema)
+                             {:type   :=>
+                              :input  {:type     :cat
+                                       :children (mapv ::schema args-ti)}
+                              :output s-var})]
+            (if (u/mgu-failure? subs')
+              {::failure {:unification-failure subs'}}
+              {::subs   (u/compose-substitutions subs' subs)
+               ::schema (u/substitute subs' s-var)})))))))
 
 (defmethod algo-w :ABS
   [{:keys [params body] :as ast} env]
@@ -89,17 +98,17 @@
       (let [{body-subs ::subs body-schema ::schema :as result} (algo-w body (u/substitute-env subs env'))]
         (if (algo-w-failure? result)
           result
-          {::subs   (u/compose-substitutions subs body-subs)
+          {::subs   (u/compose-substitutions body-subs subs)
            ::schema body-schema}))
       (let [{:keys [name init]} (first remaining)
             {local-subs ::subs local-schema ::schema :as result} (algo-w init env')]
         (if (algo-w-failure? result)
           result
-          (let [subs' (u/compose-substitutions subs local-subs)
-                local-schema' (u/generalize (u/substitute-env subs' env) local-schema)]
+          (let [env' (dissoc env' name)
+                local-schema' (u/generalize (u/substitute-env local-subs env) local-schema)]
             (recur (rest remaining)
                    (assoc env' name local-schema')
-                   subs')))))))
+                   (u/compose-substitutions local-subs subs))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Clojure
