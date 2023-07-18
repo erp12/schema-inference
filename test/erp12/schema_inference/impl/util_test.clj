@@ -12,7 +12,7 @@
                                 :children [{:type 'int?}]}
                        :output {:type 'float?}})))
   (is (not (u/ground? {:type   :scheme
-                       :s-vars ['x]
+                       :s-vars [{:sym 'x}]
                        :body   {:type   :=>
                                 :input  {:type     :cat
                                          :children [{:type 'int?}]}
@@ -38,35 +38,35 @@
                     :output {:type :s-var :sym 'x}}))))
     (testing "scheme"
       (is (= {:type   :scheme
-              :s-vars ['z]
+              :s-vars [{:sym 'z}]
               :body   {:type :s-var :sym 'y}}
              (x->y {:type   :scheme
-                    :s-vars ['z]
+                    :s-vars [{:sym 'z}]
                     :body   {:type :s-var :sym 'x}})))
       ;; Occurs check
       (is (= {:type   :scheme
-              :s-vars ['x]
+              :s-vars [{:sym 'x}]
               :body   {:type :s-var :sym 'x}}
              (x->y {:type   :scheme
-                    :s-vars ['x]
+                    :s-vars [{:sym 'x}]
                     :body   {:type :s-var :sym 'x}}))))))
 
 (deftest substitute-env-test
   (is {'a {:type   :scheme
-           :s-vars ['z]
+           :s-vars [{:sym 'z}]
            :body   {:type  :vector
                     :child {:type :s-var :sym 'y}}}
        'b {:type   :scheme
-           :s-vars ['x]
+           :s-vars [{:sym 'x}]
            :body   {:type  :set
                     :child {:type :s-var :sym 'x}}}}
       (u/substitute-env {'x {:type :s-var :sym 'y}}
                         {'a {:type   :scheme
-                             :s-vars ['z]
+                             :s-vars [{:sym 'z}]
                              :body   {:type  :vector
                                       :child {:type :s-var :sym 'x}}}
                          'b {:type   :scheme
-                             :s-vars ['x]
+                             :s-vars [{:sym 'x}]
                              :body   {:type  :set
                                       :child {:type :s-var :sym 'x}}}})))
 
@@ -101,14 +101,14 @@
   (testing "scheme"
     (is (= #{'y}
            (u/free-type-vars {:type   :scheme
-                              :s-vars ['x]
+                              :s-vars [{:sym 'x}]
                               :body   {:type   :=>
                                        :input  {:type     :cat
                                                 :children [{:type :s-var :sym 'x}]}
                                        :output {:type :s-var :sym 'y}}})))
     (is (= #{}
            (u/free-type-vars {:type   :scheme
-                              :s-vars ['x 'y]
+                              :s-vars [{:sym 'x} {:sym 'y}]
                               :body   {:type   :=>
                                        :input  {:type     :cat
                                                 :children [{:type :s-var :sym 'x}]}
@@ -116,11 +116,11 @@
 
 (deftest free-type-vars-env-test
   (is (= (u/free-type-vars-env {'a {:type   :scheme
-                                    :s-vars ['z]
+                                    :s-vars [{:sym 'z}]
                                     :body   {:type  :vector
                                              :child {:type :s-var :sym 'x}}}
                                 'b {:type   :scheme
-                                    :s-vars ['x]
+                                    :s-vars [{:sym 'x}]
                                     :body   {:type  :set
                                              :child {:type :s-var :sym 'x}}}})
          #{'x})))
@@ -131,7 +131,7 @@
   (is (= (u/instantiate {:type :s-var :sym 'x})
          {:type :s-var :sym 'x}))
   (let [s (u/instantiate {:type   :scheme
-                          :s-vars ['x]
+                          :s-vars [{:sym 'x}]
                           :body   {:type  :vector
                                    :child {:type :s-var :sym 'x}}})]
     (is (= (:type s) :vector))
@@ -146,7 +146,7 @@
     (is (= {:type :s-var :sym 'x}
            (u/generalize env {:type :s-var :sym 'x})))
     (is (= {:type   :scheme
-            :s-vars ['y]
+            :s-vars [{:sym 'y}]
             :body   {:type  :vector
                      :child {:type :s-var :sym 'y}}}
            (u/generalize env

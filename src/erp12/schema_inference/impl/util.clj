@@ -38,7 +38,8 @@
 
 (defmethod free-type-vars :scheme
   [{:keys [s-vars body]}]
-  (set/difference (free-type-vars body) (set s-vars)))
+  (set/difference (free-type-vars body)
+                  (set (map :sym s-vars))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -91,7 +92,9 @@
 
 (defmethod substitute :scheme
   [subs {:keys [s-vars body] :as scheme}]
-  (assoc scheme :body (substitute (apply dissoc subs s-vars) body)))
+  (assoc scheme
+    :body (substitute (apply dissoc subs (map :sym s-vars))
+                      body)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -119,7 +122,7 @@
 (defmethod instantiate :scheme
   [{:keys [s-vars body]}]
   (let [fresh-vars (repeatedly (count s-vars) (fn [] {:type :s-var :sym (gensym "s-")}))
-        subs (zipmap s-vars fresh-vars)]
+        subs (zipmap (map :sym s-vars) fresh-vars)]
     (substitute subs body)))
 
 (defmethod instantiate :default [schema] schema)
@@ -129,11 +132,11 @@
 (defn generalize
   [env schema]
   (let [schema (instantiate schema)
-        s-vars (set/difference (free-type-vars schema) (free-type-vars-env env))]
+        s-vars (sort (set/difference (free-type-vars schema) (free-type-vars-env env)))]
     (if (empty? s-vars)
       schema
       {:type   :scheme
-       :s-vars (vec (sort s-vars))
+       :s-vars (vec (map (fn [sym] {:sym sym}) s-vars))
        :body   schema})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -24,7 +24,7 @@
 
    'clojure.core/if
    {:type   :scheme
-    :s-vars ['a]
+    :s-vars [{:sym 'a}]
     :body   {:type   :=>
              :input  {:type     :cat
                       :children [{:type 'boolean?}
@@ -34,7 +34,7 @@
 
    'clojure.core/map
    {:type   :scheme
-    :s-vars ['a 'b]
+    :s-vars [{:sym 'a} {:sym 'b}]
     :body   {:type   :=>
              :input  {:type     :cat
                       :children [{:type   :=>
@@ -69,7 +69,7 @@
         (algo-w (ana/analyze `(fn [x#] (f (inc x#) 1)))
                 (assoc test-env
                   `f {:type   :scheme
-                      :s-vars ['a]
+                      :s-vars [{:sym 'a}]
                       :body   {:type   :=>
                                :input  {:type     :cat
                                         :children [{:type :s-var :sym 'a}
@@ -92,7 +92,7 @@
           (algo-w (ana/analyze `(fn [x# y#] (f x# y#)))
                   (assoc test-env
                     `f {:type   :scheme
-                        :s-vars ['a 'b]
+                        :s-vars [{:sym 'a} {:sym 'b}]
                         :body   {:type   :=>
                                  :input  {:type     :cat
                                           :children [{:type :s-var :sym 'a}
